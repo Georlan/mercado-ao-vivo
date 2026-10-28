@@ -10,12 +10,12 @@ const snapshot: MarketSnapshot = {
   quotes: {
     USDBRL: {
       symbol: 'USDBRL', title: 'Dólar comercial', value: 5.47, previousClose: 5.39,
-      currency: 'BRL', marketStatus: 'unknown', updatedAt: null, source: 'Cenário fictício',
+      currency: 'BRL', marketStatus: 'unknown', updatedAt: null, observedOn: null, source: 'Cenário fictício',
       feedMode: 'demo', delayMinutes: null, series: asPoints(dollarValues),
     },
     IBOV: {
       symbol: 'IBOV', title: 'Ibovespa', value: 132500, previousClose: 130850,
-      currency: 'PTS', marketStatus: 'unknown', updatedAt: null, source: 'Cenário fictício',
+      currency: 'PTS', marketStatus: 'unknown', updatedAt: null, observedOn: null, source: 'Cenário fictício',
       feedMode: 'demo', delayMinutes: null, series: asPoints(ibovValues),
     },
   },
