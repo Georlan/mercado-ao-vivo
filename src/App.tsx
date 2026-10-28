@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, ChevronDown,
-  Clock3, ExternalLink, Globe2, Info, Layers3, Maximize2, Radio, RefreshCw,
-  Search, ShieldAlert, TrendingUp, Zap,
+  ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, Clock3,
+  ExternalLink, Info, Maximize2, RefreshCw, Radio,
 } from 'lucide-react';
 import { MarketChart } from './components/MarketChart';
 import { officialMarketProvider } from './data/officialMarket';
-import { formatPercent, formatValue, percentageChange, rangeForSeries } from './data/marketMath';
-import type { MarketSnapshot, MarketQuote, SymbolId } from './data/marketTypes';
+import { formatPercent, formatValue, percentageChange } from './data/marketMath';
+import type { MarketQuote, MarketSnapshot, SymbolId } from './data/marketTypes';
 
 const periods = ['5D', '1M', '3M', '6M', '1A'] as const;
 type Period = typeof periods[number];
+
+const instruments: Array<{ symbol: SymbolId; short: string; name: string }> = [
+  { symbol: 'USDBRL', short: 'USD / BRL', name: 'Dólar PTAX (venda)' },
+  { symbol: 'IBOV', short: 'IBOV', name: 'Ibovespa · fechamento' },
+];
 
 function dateBr(iso: string | null | undefined): string {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '—';
@@ -19,41 +23,46 @@ function dateBr(iso: string | null | undefined): string {
 
 function QuoteChange({ quote, large = false }: { quote: MarketQuote; large?: boolean }) {
   const change = percentageChange(quote.value, quote.previousClose);
-  const isPositive = change !== null && change >= 0;
-  return <span className={`change ${isPositive ? 'positive' : 'negative'} ${large ? 'change-large' : ''}`}>
-    {isPositive ? <ArrowUpRight size={large ? 17 : 14}/> : <ArrowDownRight size={large ? 17 : 14}/>}
+  if (change === null) return <span className="change change-neutral">—</span>;
+  const direction = change > 0 ? 'positive' : change < 0 ? 'negative' : 'change-neutral';
+  return <span className={`change ${direction} ${large ? 'change-large' : ''}`}>
+    {change > 0 && <ArrowUpRight size={large ? 18 : 15} aria-hidden="true" />}
+    {change < 0 && <ArrowDownRight size={large ? 18 : 15} aria-hidden="true" />}
     {formatPercent(change)}
   </span>;
 }
 
-function QuoteCard({ symbol, quote, selected, onSelect }: { symbol: SymbolId; quote?: MarketQuote; selected: boolean; onSelect: () => void }) {
-  const range = quote ? rangeForSeries(quote.series) : null;
+function QuoteCard({ symbol, quote, selected, onSelect }: {
+  symbol: SymbolId; quote?: MarketQuote; selected: boolean; onSelect: () => void;
+}) {
+  const info = instruments.find(item => item.symbol === symbol)!;
   return <button className={`quote-card ${selected ? 'quote-card-active' : ''}`} onClick={onSelect} aria-pressed={selected}>
-    <div className="quote-header"><span className="quote-symbol">{symbol === 'USDBRL' ? 'USD / BRL' : '^IBOV'}</span><span className="quote-dot" /></div>
-    <span className="quote-label">{quote?.title ?? (symbol === 'USDBRL' ? 'Dólar PTAX (venda)' : 'Ibovespa · fechamento')}</span>
+    <span className="quote-topline"><span className="quote-symbol">{info.short}</span><span className="quote-select">{selected ? 'Em foco' : 'Ver gráfico'}</span></span>
+    <span className="quote-label">{info.name}</span>
     {quote ? <>
-      <div className="quote-number"><span>{quote.currency === 'BRL' && <small>R$</small>}{formatValue(quote.value, quote.currency)}</span></div>
-      <div className="quote-footer"><QuoteChange quote={quote}/><span>vs. referência anterior</span></div>
-      <div className="quote-range"><span>Mín. histórico {range ? formatValue(range.min, quote.currency) : '—'}</span><span>Máx. histórico {range ? formatValue(range.max, quote.currency) : '—'}</span></div>
-      <span className="quote-reference">{quote.feedMode === 'stale' ? 'Série possivelmente desatualizada' : 'Série diária'} · Ref. {dateBr(quote.observedOn)}</span>
-    </> : <div className="quote-unavailable">Cotação indisponível <small>Sem valor de substituição</small></div>}
+      <span className="quote-number">{quote.currency === 'BRL' && <small>R$</small>}{formatValue(quote.value, quote.currency)}</span>
+      <span className="quote-footer"><QuoteChange quote={quote} /><span>vs. referência anterior</span></span>
+      <span className="quote-reference"><CalendarDays size={13} /> Referência: {dateBr(quote.observedOn)}{quote.feedMode === 'stale' ? ' · Desatualizada' : ''}</span>
+    </> : <span className="quote-unavailable">Indisponível <small>Sem dados nesta fonte</small></span>}
   </button>;
 }
 
-function TimeBadge() {
+function Clock() {
   const [clock, setClock] = useState(() => new Date());
   useEffect(() => {
     const id = window.setInterval(() => setClock(new Date()), 15_000);
     return () => window.clearInterval(id);
   }, []);
-  return <span className="clock-label"><Clock3 size={14}/>{new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).format(clock)} <span className="time-zone">BRT</span></span>;
+  return <span className="clock-label"><Clock3 size={14} aria-hidden="true" />{new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(clock)} <span className="time-zone">Brasília</span></span>;
 }
 
 function periodPoints(quote: MarketQuote, period: Period) {
   if (period === '5D') return quote.series.slice(-5);
   const days = ({ '1M': 30, '3M': 90, '6M': 180, '1A': 365 } as const)[period];
   const latest = quote.series[quote.series.length - 1]?.time ?? 0;
-  return quote.series.filter(p => p.time >= latest - days * 86_400);
+  return quote.series.filter(point => point.time >= latest - days * 86_400);
 }
 
 export default function App() {
@@ -63,10 +72,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [symbol, setSymbol] = useState<SymbolId>('USDBRL');
   const [period, setPeriod] = useState<Period>('1M');
-  const [filter, setFilter] = useState('');
-  const [view, setView] = useState<'overview' | 'watchlist'>('overview');
   const [refreshKey, setRefreshKey] = useState(0);
-  const refresh = useCallback(() => setRefreshKey(x => x + 1), []);
+  const refresh = useCallback(() => setRefreshKey(value => value + 1), []);
 
   useEffect(() => {
     let active = true;
@@ -87,79 +94,92 @@ export default function App() {
     return () => { active = false; window.clearInterval(timer); };
   }, [refreshKey]);
 
-  const selectedQuote = snapshot?.quotes[symbol];
-  const quote = selectedQuote ?? snapshot?.quotes[symbol === 'USDBRL' ? 'IBOV' : 'USDBRL'];
-  const otherQuote = quote ? snapshot?.quotes[quote.symbol === 'USDBRL' ? 'IBOV' : 'USDBRL'] : undefined;
+  const quote = snapshot?.quotes[symbol];
   const points = useMemo(() => quote ? periodPoints(quote, period) : [], [quote, period]);
-  const visibleStocks = snapshot?.stocks.filter(item => `${item.ticker} ${item.name}`.toLowerCase().includes(filter.toLowerCase())) ?? [];
-  const winners = [...visibleStocks].filter(item => item.changePercent >= 0).sort((a, b) => b.changePercent - a.changePercent);
-  const losers = [...visibleStocks].filter(item => item.changePercent < 0).sort((a, b) => a.changePercent - b.changePercent);
-  const quotePositive = quote ? (percentageChange(quote.value, quote.previousClose) ?? 0) >= 0 : true;
-  const hasQuotes = Boolean(snapshot && Object.keys(snapshot.quotes).length);
-  const checked = snapshot?.checkedAt ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(new Date(snapshot.checkedAt)) : '—';
+  // A cor da linha representa a tendência da janela selecionada, não a variação do último dia.
+  const quotePositive = points.length > 1 ? points[points.length - 1].value >= points[0].value : true;
+  const checked = snapshot?.checkedAt ? new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+  }).format(new Date(snapshot.checkedAt)) : '—';
+  const available = Boolean(snapshot?.quotes.USDBRL || snapshot?.quotes.IBOV);
 
   return <div className={`app ${broadcast ? 'app-broadcast' : ''}`}>
-    <div className="top-accent" />
     <header className="header">
-      <a className="brand" href="/" aria-label="Mercado ao Vivo, início"><span className="brand-icon"><Activity size={20} strokeWidth={2.5}/></span><span><strong>MERCADO<span className="brand-muted">AO VIVO</span></strong><small>CENTRAL DE MERCADO</small></span></a>
+      <a className="brand" href="/" aria-label="Mercado ao Vivo — início">
+        <img className="brand-mark" src="/assets/brand/market-mark.svg" width="42" height="42" alt="" />
+        <span className="brand-lockup"><strong>mercado<span>ao vivo</span></strong><small>DADOS DE MERCADO</small></span>
+      </a>
       {!broadcast && <nav className="navigation" aria-label="Navegação principal">
-        <button onClick={() => setView('overview')} className={view === 'overview' ? 'nav-active' : ''}><Layers3 size={16}/> Visão geral</button>
-        <button onClick={() => setView('watchlist')} className={view === 'watchlist' ? 'nav-active' : ''}><BarChart3 size={16}/> Ativos</button>
-        <a href="#sobre"><Info size={16}/> Sobre os dados</a>
+        <a href="#painel">Painel</a><a href="#ativos">Ativos</a><a href="#sobre">Fontes e metodologia</a>
       </nav>}
-      <div className="header-actions"><TimeBadge/>{!broadcast && <a className="broadcast-link" href="/broadcast"><Maximize2 size={15}/> Modo transmissão <ArrowRight size={14}/></a>}{broadcast && <span className="broadcast-mode-label"><Radio size={15}/> LAYOUT BROADCAST</span>}</div>
+      <div className="header-actions"><Clock />
+        {!broadcast ? <a className="broadcast-link" href="/broadcast"><Maximize2 size={15} /> Transmissão <ArrowRight size={14} /></a>
+          : <span className="broadcast-mode-label"><Radio size={14} /> Modo transmissão</span>}
+      </div>
     </header>
 
-    <div className="demo-banner data-banner" role="status"><ShieldAlert size={15}/><strong>DADOS OFICIAIS DE REFERÊNCIA</strong><span>PTAX do Banco Central e fechamento histórico do Ibovespa (D−1). Não são cotações intradiárias nem preços em tempo real.</span></div>
+    <div className="data-banner" role="note"><Info size={14} /><span><strong>Dados de referência</strong> — PTAX diária e fechamento IBOV D−1. Não representam cotações intradiárias em tempo real.</span></div>
 
-    <main className="main">
+    <main className="main" id="painel">
       <div className="headline-row">
-        <div><div className="eyebrow"><span className="eyebrow-line"/> VISÃO CONSOLIDADA · BRASIL</div><h1>{view === 'overview' || broadcast ? 'Radar do mercado' : 'Ativos monitorados'}<span className="heading-period">.</span></h1><p>Dados reais de referência, origem identificada e acompanhamento automático das publicações.</p></div>
-        <div className="headline-right"><span className="status-pill"><span className="status-pulse"/>{failure ? 'FALHA NA ÚLTIMA CONSULTA' : hasQuotes ? 'REFERÊNCIAS DIÁRIAS' : 'FONTES INDISPONÍVEIS'}</span><span className="headline-time">Consulta ao servidor: {checked} BRT</span></div>
+        <div className="headline-copy"><span className="eyebrow">MERCADOS · BRASIL</span><h1>Dólar e Ibovespa</h1>
+          <p>Séries públicas, com origem e data de referência identificadas.</p></div>
+        <div className="headline-right"><span className={`status-pill ${failure ? 'status-error' : ''}`}><span className="status-indicator" />{failure ? 'Falha na consulta' : available ? 'Referências diárias' : 'Aguardando fontes'}</span>
+          <span className="headline-time">Consultado às {checked} · horário de Brasília</span></div>
       </div>
-      <div className="market-toolbar"><span><Info size={14}/> {failure ? 'Não foi possível atualizar; não confunda valores anteriores com dados atuais.' : 'Atualização automática a cada 5 min · As referências só mudam quando a fonte publica novos dados.'}</span><button type="button" onClick={refresh} disabled={busy}><RefreshCw size={14} className={busy ? 'spin' : ''}/> {busy ? 'Consultando…' : 'Atualizar fontes'}</button></div>
 
-      {!snapshot && !failure ? <div className="loading-panel" role="status">Consultando fontes oficiais…</div> : <>
-      {(!snapshot || !hasQuotes) && <div className="source-error" role="alert">Não foi possível obter cotações oficiais agora. O painel não exibirá preços simulados. Verifique a conexão e tente atualizar novamente.</div>}
+      <div className="market-toolbar"><span>{failure ? 'Não foi possível renovar a consulta. Verifique as datas antes de utilizar os valores.' : 'Consulta periódica a cada 5 minutos; os valores mudam apenas quando publicados.'}</span>
+        {!broadcast && <button type="button" onClick={refresh} disabled={busy}><RefreshCw size={15} className={busy ? 'spin' : ''} />{busy ? 'Consultando' : 'Atualizar dados'}</button>}
+      </div>
+
+      {!snapshot && !failure && <div className="loading-panel" role="status">Consultando fontes…</div>}
+      {failure && <div className="source-error" role="alert">Falha ao consultar as fontes. {available ? 'Os dados abaixo podem estar desatualizados.' : 'Nenhuma cotação será substituída por valores simulados.'}</div>}
+
       <div className="dashboard-grid">
-        <section className="left-column" aria-label="Cotações principais">
-          <div className="section-title"><span><Zap size={14}/> INDICADORES PRINCIPAIS</span><span>01 / 03</span></div>
-          <QuoteCard symbol="USDBRL" quote={snapshot?.quotes.USDBRL} selected={quote?.symbol === 'USDBRL'} onSelect={() => setSymbol('USDBRL')} />
-          <QuoteCard symbol="IBOV" quote={snapshot?.quotes.IBOV} selected={quote?.symbol === 'IBOV'} onSelect={() => setSymbol('IBOV')} />
-          <div className="small-insight"><div className="insight-top"><Info size={15}/><strong>Entenda as referências</strong></div><p>PTAX é a taxa de referência oficial do BCB, não preço de negociação ao vivo. O IBOV apresenta fechamentos anteriores (D−1) do Ipeadata. A data de referência não é o horário de publicação. Dados podem ficar indisponíveis ou atrasados.</p></div>
+        <section className="left-column" aria-label="Indicadores principais">
+          <h2 className="section-title">Indicadores</h2>
+          {instruments.map(item => <QuoteCard key={item.symbol} symbol={item.symbol} quote={snapshot?.quotes[item.symbol]} selected={symbol === item.symbol} onSelect={() => setSymbol(item.symbol)} />)}
+          <p className="left-note">Selecione um indicador para consultar sua série histórica.</p>
         </section>
 
         <section className="center-column" aria-label="Gráfico principal">
           <div className="chart-panel">
-            <div className="chart-top"><div><div className="chart-kicker">GRÁFICO PRINCIPAL <span className="demo-mini">SÉRIE DIÁRIA</span></div><h2>{quote?.title ?? 'Dados de mercado indisponíveis'} <span>{quote?.symbol === 'USDBRL' ? 'USD/BRL' : quote ? 'IBOV' : '—'}</span></h2></div><span className="chart-source"><span className="source-dot"/> {quote?.source ?? 'SEM FONTE'}</span></div>
-            <div className="chart-value-row">{quote ? <><strong>{quote.currency === 'BRL' ? 'R$ ' : ''}{formatValue(quote.value, quote.currency)}</strong><QuoteChange quote={quote} large/></> : <strong>—</strong>}</div>
-            <div className="period-selector" role="group" aria-label="Período exibido">
-              {periods.map(p => <button key={p} onClick={() => setPeriod(p)} className={period === p ? 'period-active' : ''} aria-pressed={period === p}>{p}</button>)}
-              <span className="period-note">Fechamentos diários</span>
+            <div className="chart-top"><div><span className="chart-kicker">SÉRIE HISTÓRICA</span><h2>{symbol === 'USDBRL' ? 'Dólar PTAX (venda)' : 'Ibovespa (fechamento)'}</h2></div>
+              <span className="chart-source">{quote?.source ?? 'Fonte indisponível'}</span></div>
+            <div className="chart-value-row">
+              <strong>{quote ? `${quote.currency === 'BRL' ? 'R$ ' : ''}${formatValue(quote.value, quote.currency)}` : '—'}</strong>
+              {quote && <QuoteChange quote={quote} large />}
+              {quote && <span className="chart-value-note">em relação à referência anterior</span>}
             </div>
-            <div className="main-chart">{quote && points.length ? <MarketChart points={points} positive={quotePositive} label={`Série diária ${quote.title}, referência ${dateBr(quote.observedOn)}`} /> : <div className="empty-chart">Sem histórico disponível para exibição</div>}</div>
-            <div className="chart-bottom"><span><span className="legend-line"/> {quote?.title ?? 'Aguardando fonte'}</span><span>{quote ? `Ref. ${dateBr(quote.observedOn)} · ${quote.feedMode === 'stale' ? 'Possivelmente desatualizado' : 'Diário, não intradiário'}` : 'Sem dados'}</span></div>
-            {quote?.sourceUrl && <a className="source-link" href={quote.sourceUrl} target="_blank" rel="noreferrer">Consultar fonte: {quote.source} <ExternalLink size={12}/></a>}
-          </div>
-          <div className="center-bottom-grid">
-            <div className="stat-panel"><div className="stat-heading"><TrendingUp size={16}/> VARIAÇÃO ENTRE REFERÊNCIAS</div><div className="stat-number">{quote ? <QuoteChange quote={quote} large/> : '—'}</div><p>Comparação entre os dois últimos valores publicados, não variação intradiária.</p></div>
-            <div className="stat-panel"><div className="stat-heading"><Globe2 size={16}/> SEGUNDO INDICADOR</div><div className="stat-side"><strong>{otherQuote?.symbol === 'IBOV' ? 'IBOV' : otherQuote ? 'USD/BRL' : '—'}</strong>{otherQuote && <QuoteChange quote={otherQuote}/>}</div><p>{otherQuote ? `Fechamento/ref. ${dateBr(otherQuote.observedOn)}` : 'Outra fonte temporariamente indisponível.'}</p></div>
+            <div className="period-selector" role="group" aria-label="Período do histórico">
+              {periods.map(p => <button key={p} onClick={() => setPeriod(p)} className={period === p ? 'period-active' : ''} aria-pressed={period === p}>{p}</button>)}
+              <span className="period-note">Observações diárias</span>
+            </div>
+            <div className="main-chart">{quote && points.length ? <MarketChart points={points} positive={quotePositive} label={`Histórico diário de ${quote.title}, referência ${dateBr(quote.observedOn)}`} />
+              : <div className="empty-chart"><img src="/assets/states/data-unavailable.svg" width="180" height="90" alt="" /><strong>Histórico indisponível</strong><span>Selecione outra fonte ou tente atualizar.</span></div>}</div>
+            <div className="chart-bottom"><span>{quote ? `Referência ${dateBr(quote.observedOn)}${quote.feedMode === 'stale' ? ' · Série possivelmente desatualizada' : ''}` : 'Sem dados para este indicador'}</span>
+              {quote?.sourceUrl && <a className="source-link" href={quote.sourceUrl} target="_blank" rel="noreferrer">Ver fonte <ExternalLink size={13}/></a>}</div>
           </div>
         </section>
 
-        <aside className="right-column" aria-label="Radar de ações">
-          <div className="section-title"><span><Activity size={14}/> RADAR DE AÇÕES</span><span>02 / 03</span></div>
-          <div className="movers-panel"><div className="panel-tabs"><span>Maiores variações</span><span className="tiny-chip">AGUARDANDO FONTE</span></div>
-            {visibleStocks.length ? <><div className="movers-title"><ArrowUpRight size={15}/> ALTAS</div>{winners.map(stock => <div className="mover-row" key={stock.ticker}><div><strong>{stock.ticker}</strong><span>{stock.name}</span></div><span className="positive">{formatPercent(stock.changePercent)}</span></div>)}<div className="movers-title down"><ArrowDownRight size={15}/> BAIXAS</div>{losers.map(stock => <div className="mover-row" key={stock.ticker}><div><strong>{stock.ticker}</strong><span>{stock.name}</span></div><span className="negative">{formatPercent(stock.changePercent)}</span></div>)}</> : <div className="movers-empty"><Info size={18}/><strong>Sem ações em tempo real</strong><p>Este radar só será ativado quando houver fonte com autorização de exibição pública. Nenhuma alta ou baixa fictícia será mostrada.</p></div>}
+        <aside className="right-column" aria-label="Cobertura de mercado">
+          <h2 className="section-title">Cobertura</h2>
+          <div className="coverage-panel">
+            <div className="coverage-row"><div><strong>USD/BRL</strong><span>Banco Central · PTAX</span></div><span className={`coverage-status ${snapshot?.quotes.USDBRL ? '' : 'coverage-off'}`}>{snapshot?.quotes.USDBRL ? 'Disponível' : 'Indisponível'}</span></div>
+            <div className="coverage-row"><div><strong>Ibovespa</strong><span>Ipeadata · D−1</span></div><span className={`coverage-status ${snapshot?.quotes.IBOV ? '' : 'coverage-off'}`}>{snapshot?.quotes.IBOV ? 'Disponível' : 'Indisponível'}</span></div>
+            <div className="coverage-row"><div><strong>Ações individuais</strong><span>Aguardando fonte licenciada</span></div><span className="coverage-status coverage-off">Sem cobertura</span></div>
           </div>
-          <div className="sponsor-panel"><span>ESPAÇO PUBLICITÁRIO</span><div className="sponsor-inner"><span className="sponsor-icon">◇</span><strong>Sua marca aqui</strong><small>Área reservada para futuro patrocínio identificado.</small></div></div>
+          <div className="context-panel"><span className="context-heading">COMO LER O PAINEL</span>
+            <p>A PTAX é uma taxa de referência, não o preço para compra de dólar. O Ibovespa disponível aqui é um fechamento histórico, não uma cotação intradiária.</p>
+          </div>
         </aside>
       </div>
-      <section className="watchlist-section" aria-label="Lista de ativos"><div className="watchlist-heading"><div><span className="eyebrow">ACOMPANHAMENTO</span><h2>Ativos em destaque</h2></div>{!broadcast && <div className="search-field"><Search size={16}/><input aria-label="Buscar ativo" placeholder="Buscar ativo..." value={filter} onChange={e => setFilter(e.target.value)} /></div>}</div>
-        <div className="stock-grid">{visibleStocks.length ? visibleStocks.map(stock => <div key={stock.ticker} className="stock-item"><span className="stock-initial">{stock.ticker.slice(0, 2)}</span><span className="stock-info"><strong>{stock.ticker}</strong><small>{stock.name}</small></span><span className={stock.changePercent >= 0 ? 'positive' : 'negative'}>{formatPercent(stock.changePercent)}</span></div>) : <div className="no-results">Ainda sem feed autorizado de ações individuais. {filter && 'Nenhum resultado disponível para a busca.'}</div>}</div>
-      </section>
+
+      {!broadcast && <>
+        <section className="assets-section" id="ativos"><div><span className="eyebrow">COBERTURA EM EVOLUÇÃO</span><h2>Ações brasileiras</h2><p>O radar de ações será disponibilizado quando houver uma fonte que permita exibição pública. Não exibimos altas e baixas fictícias.</p></div><span className="assets-state">Ainda não disponível</span></section>
+        <section className="method-section" id="sobre"><div><h2>Fontes e metodologia</h2><p>A interface verifica as publicações periodicamente. O horário da consulta não é o horário da cotação.</p></div><div className="method-details"><p><strong>USD/BRL:</strong> série 1 do Banco Central, dólar PTAX de venda.</p><p><strong>IBOV:</strong> série histórica diária do Ipeadata (origem B3), apenas fechamentos anteriores à data atual.</p></div></section>
       </>}
     </main>
-    <footer className="footer" id="sobre"><div><span className="footer-logo"><Activity size={15}/> MERCADO AO VIVO</span><span>BCB PTAX diária · Ipeadata IBOV D−1 · sem cotações intradiárias</span></div><div><span>Informativo, não recomendação de investimento</span>{!broadcast && <a href="/broadcast">Abrir tela de transmissão <ExternalLink size={13}/></a>}{broadcast && <a href="/">Voltar ao site <ChevronDown size={13}/></a>}</div></footer>
+    <footer className="footer"><span>© Mercado ao Vivo · Informação, não recomendação de investimento</span><div><span>Fontes: Banco Central e Ipeadata</span>{broadcast && <a href="/">Voltar ao site <ArrowRight size={13} /></a>}</div></footer>
   </div>;
 }
