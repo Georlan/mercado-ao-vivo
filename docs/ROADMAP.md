@@ -1,17 +1,25 @@
-# Roadmap de produto
+# Roadmap — Mercado ao Vivo
 
-1. **MVP visual (este PR):** HUD responsivo, modo 16:9 `/broadcast`, estados de cotação, provider isolado, dados demonstrativos explícitos.
-2. **Viabilidade de market data:** testar fontes de USD/BRL e IBOV; obter autorização explícita para exibição pública, distribuição e monetização; documentar atrasos e termos. Não inserir chaves no front-end.
-3. **Back-end:** FastAPI com contratos versionados, agregação, cache, timestamps de origem, sinalização de falhas e limites de taxa; dados compartilhados para site e transmissão.
-4. **Site e retenção:** páginas por ativo, SEO, navegação, alertas opt-in e métricas respeitando privacidade.
-5. **Contas e persistência:** PostgreSQL quando usuários, watchlist e previsões gratuitas precisarem de histórico, rate limit e prevenção de fraude. Sem apostar dinheiro nem criar plataforma de jogos de azar.
-6. **Live 24h:** testar browser source do OBS, disponibilidade, uso de CPU, quedas de rede, watchdog, grafismo de dados atrasados e regras do YouTube.
-7. **Monetização:** patrocínio identificado no site, depois acordos publicitários e serviços premium conforme tráfego. Revisar licenças de dados e políticas da plataforma.
+## Concluído
 
-## Princípios inegociáveis
+1. HUD responsivo, site e modo `/broadcast`.
+2. Agregador de **dados de referência diários**: BCB PTAX venda (SGS 1) e Ibovespa de fechamento D−1 (Ipeadata); origem e data visíveis; sem fallback fictício.
+3. Atualização a cada 5 minutos, isolamento de falhas por fonte, testes de parsing e CI.
 
-- Mostrar fonte, horário de atualização e atraso efetivo de cada ativo.
-- Não apresentar DEMO como cotação real; não interpolar preços para simular ticks.
-- Não manter a palavra “AO VIVO” junto de dados indisponíveis ou atrasados sem identificação.
-- Nenhum segredo, token ou credencial no repositório público.
-- Gates de CI verdes antes de merge, inclusive sem testes destrutivos em produção.
+## Próximas entregas
+
+1. **Homologação manual dos feeds:** com o ambiente online, verificar CORS/back-end, disponibilidade e horário efetivo das publicações. Validar estabilidade em 24h, feriados e mudanças do formato Ipeadata; monitorar 429 e timeouts. Não alegar tempo real.
+2. **Licenças:** confirmar termos do Ipeadata e de eventuais agregadores antes de publicar dados em site monetizado ou live. Para intradiário do Ibovespa, negociar fonte devidamente licenciada; nunca coletar automaticamente páginas públicas da B3.
+3. **Infraestrutura:** cache compartilhado, logs sem credenciais, limites de upstream, avisos de indisponibilidade, alerta de série vencida e deploy HTTPS.
+4. **Retenção:** páginas individuais, SEO, favoritos, alertas opt-in e métricas privativas.
+5. **Comunidade:** previsões **gratuitas, sem apostas/prêmios monetários**, regras auditáveis, autenticação e banco PostgreSQL quando necessário.
+6. **Live:** OBS Browser Source em `/broadcast`, watchdog e avaliação das regras de monetização do YouTube.
+7. **Receita:** patrocínios identificados, anúncios e serviços premium após comprovar audiência e autorização de dados.
+
+## Regras de integridade
+
+- Nunca representar PTAX ou fechamento IBOV D−1 como cotação em tempo real.
+- Mostrar **data de referência**; não inventar timestamps de publicação.
+- Não mostrar ticker/alta/baixa de ativos sem fonte autorizada.
+- Falha de API = indisponível, jamais dados demonstrativos se passando por atuais.
+- Nenhum segredo no GitHub público; CI verde antes de merge.

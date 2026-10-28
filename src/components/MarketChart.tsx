@@ -6,9 +6,10 @@ interface Props {
   points: MarketPoint[];
   positive: boolean;
   compact?: boolean;
+  label?: string;
 }
 
-export function MarketChart({ points, positive, compact = false }: Props) {
+export function MarketChart({ points, positive, compact = false, label = 'Gráfico de série histórica' }: Props) {
   const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,5 +42,5 @@ export function MarketChart({ points, positive, compact = false }: Props) {
     return () => { observer.disconnect(); chart.remove(); };
   }, [points, positive, compact]);
 
-  return <div ref={container} className={compact ? 'chart chart-compact' : 'chart'} role="img" aria-label="Gráfico ilustrativo com cotações fictícias" />;
+  return <div ref={container} className={compact ? 'chart chart-compact' : 'chart'} role="img" aria-label={label} />;
 }
